@@ -1,0 +1,10 @@
+# Список бібліотек
+
+fastapi>=0.141.1
+uvicorn[standard]>=0.28.0
+sqlalchemy>=2.0.0
+asyncpg>=0.29.0
+aiosqlite>=0.20.0
+pydantic-settings>=2.0.0
+ruff>=0.3.0
+pre-commit>=3.6.0
