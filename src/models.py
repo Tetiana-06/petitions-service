@@ -1,15 +1,33 @@
-# Імпортуємо стандартний клас для роботи з датою та часом
+# стандартний клас для роботи з датою та часом
 from datetime import datetime
+from enum import Enum
 
-# Імпортуємо типи колонок, обмеження та зовнішній ключ із ядра SQLAlchemy
+# типи колонок, обмеження та зовнішній ключ із ядра SQLAlchemy
 from sqlalchemy import DateTime, ForeignKey, Integer, String, Text, UniqueConstraint
 
-# Імпортуємо сучасні інструменти декларативної типізації SQLAlchemy 2.0:
+# сучасні інструменти декларативної типізації SQLAlchemy 2.0:
 # Mapped — тип поля в Python, mapped_column — опис колонки в БД
-from sqlalchemy.orm import Mapped, mapped_column
+from sqlalchemy.orm import Mapped, mapped_column, relationship
 
-# Імпортуємо спільний базовий клас (декларативну базу), створений раніше в database.py
+# спільний базовий клас (декларативну базу), створений раніше в database.py
 from src.database import Base
+
+
+class UserRole(str, Enum):
+    USER = "user"
+    ADMIN = "admin"
+
+
+class User(Base):
+    __tablename__ = "users"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    username: Mapped[str] = mapped_column(String(50), unique=True, index=True, nullable=False)
+    hashed_password: Mapped[str] = mapped_column(String(255), nullable=False)
+    role: Mapped[str] = mapped_column(String(20), default=UserRole.USER.value, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+
+    petitions = relationship("Petition", back_populates="author")
 
 
 # Модель таблиці петицій, успадкована від Base
@@ -27,12 +45,16 @@ class Petition(Base):
     # Повний текст петиції: необмежений за довжиною текст (TEXT), обов'язкове поле
     description: Mapped[str] = mapped_column(Text, nullable=False)
 
-    # Необхідна кількість голосів для розгляду: за замовчуванням встановлюється 500
-    target_votes: Mapped[int] = mapped_column(Integer, default=500)
+    # Необхідна кількість голосів для розгляду 1000
+    target_votes: Mapped[int] = mapped_column(Integer, default=1000)
 
+    author_id: Mapped[int] = mapped_column(Integer, ForeignKey("users.id"), nullable=False)
     # Дата й час створення: тип DATETIME, автоматично генерується поточний час при збереженні
     # (передається саме функція datetime.utcnow як callback без круглих дужок)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+
+    author = relationship("User", back_populates="petitions")
+    votes = relationship("Vote", back_populates="petition")
 
 
 # Модель таблиці голосів користувачів
@@ -53,6 +75,8 @@ class Vote(Base):
 
     # Дата й час фіксації голосу (за замовчуванням поточний час створення)
     voted_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+
+    petition = relationship("Petition", back_populates="votes")
 
     # Гарантія на рівні БД: один підпис — один голос за петицію
     # __table_args__ задає додаткові параметри та обмеження таблиці
