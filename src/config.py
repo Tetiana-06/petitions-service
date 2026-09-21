@@ -3,7 +3,7 @@
 import os
 from pathlib import Path
 
-# Визначаємо кореневу папку проєкту (на один рівень вище за папку src)
+# Визначаю кореневу папку проєкту (на один рівень вище за папку src)
 BASE_DIR = Path(__file__).resolve().parent.parent
 DB_PATH = BASE_DIR / "src" / "petitions.db"
 
