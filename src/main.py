@@ -1,23 +1,30 @@
-# Каркас FastAPI з ендпоінтами перевірки працездатності:
-# Імпортуємо декоратор для створення асинхронного контекстного менеджера (життєвий цикл застосунку)
+# Каркас FastAPI з ендпоінтами сервісу петицій та контролем доступу (RBAC)
+import hashlib
 from contextlib import asynccontextmanager
+from pathlib import Path
+from typing import List, Optional
 
-# Імпортуємо головний клас вебфреймворка FastAPI
-from fastapi import Depends, FastAPI, HTTPException, status
+from fastapi import Depends, FastAPI, HTTPException, Query, status
+from fastapi.responses import FileResponse
 from fastapi.security import OAuth2PasswordRequestForm
-from sqlalchemy import select
+from fastapi.staticfiles import StaticFiles
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import selectinload
 
-# Імпортуємо з нашого модуля БД спільний базовий клас моделей (Base) та рушій підключень (engine)
-from src.database import Base, engine, get_db
-from src.models import Petition, User, UserRole, Vote
+from src.database import get_db
+from src.init_db import init_models, seed_data
+from src.models import Petition, PetitionStatus, User, UserRole, Vote
 from src.schemas import (
+    AdminStats,
     PetitionCreate,
     PetitionResponse,
+    PetitionStatusUpdate,
     PetitionUpdate,
     Token,
     UserCreate,
     UserResponse,
+    UserUpdate,
     VoteCreate,
 )
 from src.security import (
@@ -28,29 +35,37 @@ from src.security import (
     verify_password,
 )
 
+BASE_DIR = Path(__file__).resolve().parent.parent
+STATIC_DIR = BASE_DIR / "src" / "static"
 
-# Декоратор перетворює асинхронну функцію-генератор на контекстний менеджер для FastAPI
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    # Код ДО ключового слова yield виконується один раз під час запуску (startup) сервера:
-    # engine.begin() відкриває транзакційне асинхронне з'єднання (Connection)
-    async with engine.begin() as conn:
-        # Base.metadata.create_all — синхронний метод SQLAlchemy, тому run_sync запускає його
-        # в окремому потоці, створюючи всі відсутні таблиці в БД згідно з наявними моделями
-        await conn.run_sync(Base.metadata.create_all)
-
-    # yield передає керування запущеному застосунку й тримає його активним для обробки запитів.
-    # Код ПІСЛЯ yield (якщо його додати) виконається один раз при вимкненні (shutdown) сервера
+    # Виконується під час запуску (startup) сервера:
+    await init_models()
+    await seed_data()
     yield
 
 
-# Створюємо головний екземпляр застосунку FastAPI з метаданими для документації Swagger/ReDoc
 app = FastAPI(
-    title="Local Petitions Service API",  # Назва сервісу в документації (/docs)
-    description="Electronic petitions API with RBAC and JWT Authentication",  # Опис призначення API
-    version="2.0.0",  # Поточна версія API
-    lifespan=lifespan,  # Підключаємо наш контекстний менеджер життєвого циклу
+    title="Local Petitions Service API",
+    description="Electronic petitions API with RBAC, JWT Authentication, and IDOR protection",
+    version="2.0.0",
+    lifespan=lifespan,
 )
+
+# Монтування статичних файлів для веб-інтерфейсу
+if STATIC_DIR.exists():
+    app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
+
+
+# 0. ГОЛОВНА СТОРІНКА / WEB UI
+@app.get("/", tags=["UI"])
+async def root():
+    index_file = STATIC_DIR / "index.html"
+    if index_file.exists():
+        return FileResponse(str(index_file))
+    return {"message": "Сервіс місцевих електронних петицій працює"}
 
 
 # 1. АВТЕНТИФІКАЦІЯ ТА РЕЄСТРАЦІЯ
@@ -58,6 +73,7 @@ app = FastAPI(
     "/auth/register",
     response_model=UserResponse,
     status_code=status.HTTP_201_CREATED,
+    tags=["Auth"],
 )
 async def register(user_data: UserCreate, db: AsyncSession = Depends(get_db)):
     result = await db.execute(select(User).where(User.username == user_data.username))
@@ -67,12 +83,14 @@ async def register(user_data: UserCreate, db: AsyncSession = Depends(get_db)):
             detail="Username already registered",
         )
 
-    # Захист: реєстрація дозволена лише як звичайний користувач (якщо не передано явно)
-    role_to_set = UserRole.ADMIN.value if user_data.role == "admin" else UserRole.USER.value
+    # Роль: звичайний користувач за замовчуванням; опціонально дозволено роль admin для навчальних тестів
+    role_to_set = UserRole.ADMIN.value if user_data.role == UserRole.ADMIN.value else UserRole.USER.value
     new_user = User(
         username=user_data.username,
         hashed_password=hash_password(user_data.password),
         role=role_to_set,
+        full_name=user_data.full_name,
+        email=user_data.email,
     )
     db.add(new_user)
     await db.commit()
@@ -80,7 +98,7 @@ async def register(user_data: UserCreate, db: AsyncSession = Depends(get_db)):
     return new_user
 
 
-@app.post("/auth/login", response_model=Token)
+@app.post("/auth/login", response_model=Token, tags=["Auth"])
 async def login(
     form_data: OAuth2PasswordRequestForm = Depends(),
     db: AsyncSession = Depends(get_db),
@@ -94,20 +112,69 @@ async def login(
             headers={"WWW-Authenticate": "Bearer"},
         )
     token = create_access_token(data={"sub": user.username, "role": user.role})
-    return {"access_token": token, "token_type": "bearer"}
+    return {
+        "access_token": token,
+        "token_type": "bearer",
+        "user": user,
+    }
 
 
-# 2. ДОМАШНІ СТОРІНКИ-ЗАГЛУШКИ
-@app.get("/users/me")
+# 2. ДОМАШНІ СТОРІНКИ-ЗАГЛУШКИ ТА ПРОФІЛІ
+@app.get("/users/me", tags=["Users"])
 async def user_dashboard(current_user: User = Depends(get_current_user)):
     return {
         "message": f"Welcome to User Dashboard, {current_user.username}!",
+        "id": current_user.id,
+        "username": current_user.username,
         "role": current_user.role,
+        "full_name": current_user.full_name,
+        "email": current_user.email,
+        "created_at": current_user.created_at,
         "status": "active",
     }
 
 
-@app.get("/admin/dashboard")
+@app.get("/users/{user_id}", response_model=UserResponse, tags=["Users"])
+async def get_user_profile(user_id: int, db: AsyncSession = Depends(get_db)):
+    result = await db.execute(select(User).where(User.id == user_id))
+    user = result.scalars().first()
+    if not user:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
+    return user
+
+
+# Оновлення профілю користувача з захистом від IDOR
+@app.put("/users/{user_id}", response_model=UserResponse, tags=["Users"])
+async def update_user_profile(
+    user_id: int,
+    profile_data: UserUpdate,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    result = await db.execute(select(User).where(User.id == user_id))
+    target_user = result.scalars().first()
+    if not target_user:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
+
+    # IDOR Check: звичайний користувач може змінювати лише ВЛАСНИЙ профіль
+    if current_user.id != user_id and current_user.role != UserRole.ADMIN.value:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Forbidden: You cannot modify another user's profile",
+        )
+
+    if profile_data.full_name is not None:
+        target_user.full_name = profile_data.full_name
+    if profile_data.email is not None:
+        target_user.email = profile_data.email
+
+    await db.commit()
+    await db.refresh(target_user)
+    return target_user
+
+
+# 3. АДМІН-ПАНЕЛЬ ТА КЕРУВАННЯ
+@app.get("/admin/dashboard", tags=["Admin"])
 async def admin_dashboard(admin: User = Depends(require_admin)):
     return {
         "message": "Welcome to Admin Control Panel",
@@ -116,11 +183,103 @@ async def admin_dashboard(admin: User = Depends(require_admin)):
     }
 
 
-# 3. БІЗНЕС-ЛОГІКА ПЕТИЦІЙ (MVP)
+@app.get("/admin/stats", response_model=AdminStats, tags=["Admin"])
+async def admin_stats(
+    admin: User = Depends(require_admin),
+    db: AsyncSession = Depends(get_db),
+):
+    total_users = (await db.execute(select(func.count(User.id)))).scalar() or 0
+    total_petitions = (await db.execute(select(func.count(Petition.id)))).scalar() or 0
+    total_votes = (await db.execute(select(func.count(Vote.id)))).scalar() or 0
+
+    statuses = [s.value for s in PetitionStatus]
+    status_counts = {}
+    for st in statuses:
+        count = (await db.execute(select(func.count(Petition.id)).where(Petition.status == st))).scalar() or 0
+        status_counts[st] = count
+
+    return {
+        "total_users": total_users,
+        "total_petitions": total_petitions,
+        "total_votes": total_votes,
+        "petitions_by_status": status_counts,
+    }
+
+
+@app.get("/admin/users", response_model=List[UserResponse], tags=["Admin"])
+async def admin_get_all_users(
+    admin: User = Depends(require_admin),
+    db: AsyncSession = Depends(get_db),
+):
+    result = await db.execute(select(User).order_by(User.id.asc()))
+    return result.scalars().all()
+
+
+# 4. БІЗНЕС-ЛОГІКА ПЕТИЦІЙ (MVP)
+@app.get("/petitions/", response_model=List[PetitionResponse], tags=["Petitions"])
+async def list_petitions(
+    q: Optional[str] = Query(None, description="Пошук за ключовими словами"),
+    status_filter: Optional[str] = Query(None, alias="status", description="Фільтр за статусом"),
+    db: AsyncSession = Depends(get_db),
+):
+    query = select(Petition).options(selectinload(Petition.author), selectinload(Petition.votes))
+
+    if q:
+        query = query.where(Petition.title.ilike(f"%{q}%") | Petition.description.ilike(f"%{q}%"))
+    if status_filter:
+        query = query.where(Petition.status == status_filter)
+
+    query = query.order_by(Petition.created_at.desc())
+    result = await db.execute(query)
+    petitions = result.scalars().all()
+
+    response = []
+    for p in petitions:
+        response.append(
+            PetitionResponse(
+                id=p.id,
+                title=p.title,
+                description=p.description,
+                target_votes=p.target_votes,
+                status=p.status,
+                author_id=p.author_id,
+                author_username=p.author.username if p.author else None,
+                votes_count=len(p.votes) if p.votes else 0,
+                created_at=p.created_at,
+            )
+        )
+    return response
+
+
+@app.get("/petitions/{petition_id}", response_model=PetitionResponse, tags=["Petitions"])
+async def get_petition_detail(
+    petition_id: int,
+    db: AsyncSession = Depends(get_db),
+):
+    query = select(Petition).options(selectinload(Petition.author), selectinload(Petition.votes)).where(Petition.id == petition_id)
+    result = await db.execute(query)
+    petition = result.scalars().first()
+    if not petition:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Petition not found")
+
+    return PetitionResponse(
+        id=petition.id,
+        title=petition.title,
+        description=petition.description,
+        target_votes=petition.target_votes,
+        status=petition.status,
+        author_id=petition.author_id,
+        author_username=petition.author.username if petition.author else None,
+        votes_count=len(petition.votes) if petition.votes else 0,
+        created_at=petition.created_at,
+    )
+
+
 @app.post(
     "/petitions/",
     response_model=PetitionResponse,
     status_code=status.HTTP_201_CREATED,
+    tags=["Petitions"],
 )
 async def create_petition(
     petition_data: PetitionCreate,
@@ -131,26 +290,43 @@ async def create_petition(
         title=petition_data.title,
         description=petition_data.description,
         target_votes=petition_data.target_votes,
+        status=PetitionStatus.ACTIVE.value,
         author_id=current_user.id,
     )
     db.add(new_petition)
     await db.commit()
     await db.refresh(new_petition)
-    return new_petition
+
+    return PetitionResponse(
+        id=new_petition.id,
+        title=new_petition.title,
+        description=new_petition.description,
+        target_votes=new_petition.target_votes,
+        status=new_petition.status,
+        author_id=new_petition.author_id,
+        author_username=current_user.username,
+        votes_count=0,
+        created_at=new_petition.created_at,
+    )
 
 
 # Оновлення петиції з захистом від IDOR (горизонтальне розмежування прав)
-@app.put("/petitions/{petition_id}", response_model=PetitionResponse)
+@app.put(
+    "/petitions/{petition_id}",
+    response_model=PetitionResponse,
+    tags=["Petitions"],
+)
 async def update_petition(
     petition_id: int,
     update_data: PetitionUpdate,
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    result = await db.execute(select(Petition).where(Petition.id == petition_id))
+    query = select(Petition).options(selectinload(Petition.author), selectinload(Petition.votes)).where(Petition.id == petition_id)
+    result = await db.execute(query)
     petition = result.scalars().first()
     if not petition:
-        raise HTTPException(status_code=404, detail="Petition not found")
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Petition not found")
 
     # IDOR Check: Тільки автор може редагувати петицію
     if petition.author_id != current_user.id:
@@ -159,17 +335,98 @@ async def update_petition(
             detail="Forbidden: You cannot modify someone else's petition",
         )
 
-    if update_data.title:
+    if update_data.title is not None:
         petition.title = update_data.title
-    if update_data.description:
+    if update_data.description is not None:
         petition.description = update_data.description
 
     await db.commit()
     await db.refresh(petition)
-    return petition
+
+    return PetitionResponse(
+        id=petition.id,
+        title=petition.title,
+        description=petition.description,
+        target_votes=petition.target_votes,
+        status=petition.status,
+        author_id=petition.author_id,
+        author_username=petition.author.username if petition.author else None,
+        votes_count=len(petition.votes) if petition.votes else 0,
+        created_at=petition.created_at,
+    )
 
 
-@app.post("/petitions/{petition_id}/vote", status_code=status.HTTP_201_CREATED)
+# Зміна статусу петиції адміністратором (вертикальне розмежування ролей)
+@app.patch(
+    "/petitions/{petition_id}/status",
+    response_model=PetitionResponse,
+    tags=["Petitions"],
+)
+async def update_petition_status(
+    petition_id: int,
+    status_data: PetitionStatusUpdate,
+    admin: User = Depends(require_admin),
+    db: AsyncSession = Depends(get_db),
+):
+    query = select(Petition).options(selectinload(Petition.author), selectinload(Petition.votes)).where(Petition.id == petition_id)
+    result = await db.execute(query)
+    petition = result.scalars().first()
+    if not petition:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Petition not found")
+
+    valid_statuses = [s.value for s in PetitionStatus]
+    if status_data.status not in valid_statuses:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Invalid status. Must be one of: {valid_statuses}",
+        )
+
+    petition.status = status_data.status
+    await db.commit()
+    await db.refresh(petition)
+
+    return PetitionResponse(
+        id=petition.id,
+        title=petition.title,
+        description=petition.description,
+        target_votes=petition.target_votes,
+        status=petition.status,
+        author_id=petition.author_id,
+        author_username=petition.author.username if petition.author else None,
+        votes_count=len(petition.votes) if petition.votes else 0,
+        created_at=petition.created_at,
+    )
+
+
+# Видалення петиції (доступно автору або адміністратору)
+@app.delete("/petitions/{petition_id}", tags=["Petitions"])
+async def delete_petition(
+    petition_id: int,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    result = await db.execute(select(Petition).where(Petition.id == petition_id))
+    petition = result.scalars().first()
+    if not petition:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Petition not found")
+
+    if petition.author_id != current_user.id and current_user.role != UserRole.ADMIN.value:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Forbidden: Only author or admin can delete this petition",
+        )
+
+    await db.delete(petition)
+    await db.commit()
+    return {"status": "success", "message": f"Petition {petition_id} deleted successfully"}
+
+
+# Голосування за петицію
+@app.post(
+    "/petitions/{petition_id}/vote",
+    status_code=status.HTTP_201_CREATED,
+    tags=["Petitions"],
+)
 async def vote_for_petition(
     petition_id: int,
     vote_data: VoteCreate,
@@ -177,14 +434,28 @@ async def vote_for_petition(
     db: AsyncSession = Depends(get_db),
 ):
     result = await db.execute(select(Petition).where(Petition.id == petition_id))
-    if not result.scalars().first():
-        raise HTTPException(status_code=404, detail="Petition not found")
+    petition = result.scalars().first()
+    if not petition:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Petition not found")
 
-    # Перевірка на дублікат голосу
+    if petition.status not in [PetitionStatus.ACTIVE.value, PetitionStatus.UNDER_REVIEW.value]:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Voting closed: petition is not active",
+        )
+
+    # Якщо хеш підпису не передано явно, генеруємо унікальний підпис на основі user_id
+    sig_hash = (
+        vote_data.voter_signature_hash
+        if vote_data.voter_signature_hash
+        else hashlib.sha256(f"user_{current_user.id}_signed_petition_{petition_id}".encode()).hexdigest()
+    )
+
+    # Перевірка на дублікат голосу (за хешем підпису або user_id)
     existing_vote = await db.execute(
         select(Vote).where(
             Vote.petition_id == petition_id,
-            Vote.voter_signature_hash == vote_data.voter_signature_hash,
+            (Vote.voter_signature_hash == sig_hash) | (Vote.user_id == current_user.id),
         )
     )
     if existing_vote.scalars().first():
@@ -195,23 +466,15 @@ async def vote_for_petition(
 
     vote = Vote(
         petition_id=petition_id,
-        voter_signature_hash=vote_data.voter_signature_hash,
+        user_id=current_user.id,
+        voter_signature_hash=sig_hash,
     )
     db.add(vote)
     await db.commit()
     return {"status": "success", "message": "Vote recorded successfully"}
 
 
-# Декоратор реєструє обробник для GET-запиту на шлях /health;
-# tags=["System"] групує цей ендпоінт в окрему секцію "System" в інтерфейсі Swagger
+# 5. СИСТЕМНІ ЕНДПОІНТИ
 @app.get("/health", tags=["System"])
 async def health_check():
-    # Повертає простий JSON для моніторингу працездатності (використовується оркестраторами, наприклад, Docker/K8s)
     return {"status": "ok", "service": "petitions-service"}
-
-
-# Декоратор реєструє обробник для кореневого URL (GET /)
-@app.get("/", tags=["Root"])
-async def root():
-    # Повертає вітальне JSON-повідомлення, підтверджуючи, що сервіс успішно піднявся
-    return {"message": "Сервіс місцевих електронних петицій працює"}
