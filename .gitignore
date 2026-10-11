@@ -21,3 +21,8 @@ venv/
 
 # Внутрішня папка налаштувань редактора Visual Studio Code
 .vscode/
+
+# Локальні файли конфігурацій та секретів
+.env
+.env.local
+.env.*.local

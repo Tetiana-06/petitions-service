@@ -10,6 +10,7 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 if str(BASE_DIR) not in sys.path:
     sys.path.insert(0, str(BASE_DIR))
 
+from src.config import settings  # noqa: E402
 from src.database import AsyncSessionLocal, Base, engine  # noqa: E402
 from src.models import Petition, PetitionStatus, User, UserRole, Vote  # noqa: E402
 from src.security import hash_password  # noqa: E402
@@ -34,10 +35,14 @@ async def init_models():
                 # Колонка вже існує
                 pass
 
-    print("Таблиці успішно створено та оновлено!")
+    print(f"[{settings.APP_ENV.upper()}] Таблиці успішно ініціалізовано!")
 
 
 async def seed_data():
+    if not settings.SEED_DEMO_DATA:
+        print(f"[{settings.APP_ENV.upper()}] Пропуск завантаження демо-даних (SEED_DEMO_DATA=False для production)")
+        return
+
     async with AsyncSessionLocal() as session:
         # 1. Перевірка наявності користувачів
         res = await session.execute(select(User).where(User.username == "admin"))

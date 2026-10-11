@@ -1,36 +1,34 @@
-# Асинхронна ініціалізація підключення до БД
-
+# Асинхронна ініціалізація підключення до БД з підтримкою ізоляції середовищ (Lab 3)
 from collections.abc import AsyncGenerator
 
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 from sqlalchemy.orm import declarative_base
 
-from src.config import settings
+from src.config import BASE_DIR, settings
 
-# Цей фрагмент коду налаштовує асинхронну роботу з базою даних через SQLAlchemy 2.0+
 
-# 1. Створюємо асинхронний рушій (пул підключень до бази даних)
-#    echo=True вмикає виведення всіх сирих SQL-запитів у термінал (для дебагу)
-engine = create_async_engine(settings.DATABASE_URL, echo=True)
+def resolve_database_url(url: str) -> str:
+    """Забезпечує абсолютний шлях для SQLite БД для уникнення колізій директорій."""
+    sqlite_prefix = "sqlite+aiosqlite:///"
+    if url.startswith(sqlite_prefix) and not url.startswith("sqlite+aiosqlite:////") and ":\\" not in url:
+        rel_path = url[len(sqlite_prefix) :]
+        abs_path = (BASE_DIR / rel_path).resolve()
+        return f"{sqlite_prefix}{abs_path.as_posix()}"
+    return url
 
-# 2. Фабрика сесій: налаштовує шаблон, за яким створюватимуться сесії
-#    - bind=engine: прив'язуємо сесії до нашого рушія
-#    - class_=AsyncSession: явно кажемо створювати саме асинхронні сесії
-#    - expire_on_commit=False: запобігає «скиданню» даних з пам'яті після commit,
-#      щоб уникнути помилки MissingGreenlet при повторному зверненні до полів об'єкта
+
+# 1. Створюємо асинхронний рушій із параметрами з конфігурації
+db_url = resolve_database_url(settings.DATABASE_URL)
+engine = create_async_engine(db_url, echo=settings.DB_ECHO)
+
+# 2. Фабрика асинхронних сесій
 AsyncSessionLocal = async_sessionmaker(bind=engine, class_=AsyncSession, expire_on_commit=False)
 
-# 3. Базовий клас для майбутніх ORM-моделей (від нього наслідуються моделі таблиць)
+# 3. Базовий клас для декларативних ORM-моделей
 Base = declarative_base()
 
 
-# 4. Асинхронний генератор залежності (Dependency Injection для FastAPI)
-#    Типізація: генерує (yield) сесію типу AsyncSession, при завершенні нічого не повертає (None)
+# 4. Асинхронний генератор сесії (FastAPI Dependency)
 async def get_db() -> AsyncGenerator[AsyncSession, None]:
-    # 5. Створюємо екземпляр сесії всередині асинхронного контекстного менеджера;
-    #    він гарантує закриття сесії навіть у разі помилок/виключень
     async with AsyncSessionLocal() as session:
-        # 6. Віддаємо створену сесію в ендпоінт роутера та ставимо виконання на паузу
         yield session
-        # Після завершення обробки запиту виконання повертається сюди,
-        # блок async with виходить і безпечно закриває з'єднання

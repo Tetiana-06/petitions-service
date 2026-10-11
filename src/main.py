@@ -1,17 +1,19 @@
-# Каркас FastAPI з ендпоінтами сервісу петицій та контролем доступу (RBAC)
+# Каркас FastAPI з ендпоінтами сервісу петицій та контролем доступу (RBAC, Lab 2 & 3)
 import hashlib
+import logging
 from contextlib import asynccontextmanager
 from pathlib import Path
 from typing import List, Optional
 
-from fastapi import Depends, FastAPI, HTTPException, Query, status
-from fastapi.responses import FileResponse
+from fastapi import Depends, FastAPI, HTTPException, Query, Request, status
+from fastapi.responses import FileResponse, JSONResponse
 from fastapi.security import OAuth2PasswordRequestForm
 from fastapi.staticfiles import StaticFiles
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
+from src.config import settings
 from src.database import get_db
 from src.init_db import init_models, seed_data
 from src.models import Petition, PetitionStatus, User, UserRole, Vote
@@ -37,6 +39,7 @@ from src.security import (
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 STATIC_DIR = BASE_DIR / "src" / "static"
+logger = logging.getLogger("petitions_service")
 
 
 @asynccontextmanager
@@ -48,11 +51,37 @@ async def lifespan(app: FastAPI):
 
 
 app = FastAPI(
-    title="Local Petitions Service API",
-    description="Electronic petitions API with RBAC, JWT Authentication, and IDOR protection",
-    version="2.0.0",
+    title=settings.PROJECT_NAME,
+    description="Electronic petitions API with Environment Separation, RBAC, and IDOR protection",
+    version="3.0.0",
+    debug=settings.DEBUG,
     lifespan=lifespan,
 )
+
+
+# Middleware безпечної обробки непередбачених помилок 500 (Lab 3: приховування внутрішніх стектрейсів у Production)
+@app.middleware("http")
+async def security_exception_middleware(request: Request, call_next):
+    try:
+        return await call_next(request)
+    except Exception as exc:
+        logger.error(f"Internal unhandled error on {request.method} {request.url.path}: {exc}", exc_info=True)
+        if settings.DEBUG:
+            return JSONResponse(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                content={
+                    "detail": "Internal Server Error",
+                    "debug_error": str(exc),
+                    "environment": settings.APP_ENV,
+                },
+            )
+        return JSONResponse(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            content={
+                "detail": "Внутрішня помилка сервера. Будь ласка, зверніться до служби підтримки.",
+            },
+        )
+
 
 # Монтування статичних файлів для веб-інтерфейсу
 if STATIC_DIR.exists():
@@ -474,7 +503,33 @@ async def vote_for_petition(
     return {"status": "success", "message": "Vote recorded successfully"}
 
 
-# 5. СИСТЕМНІ ЕНДПОІНТИ
+# 5. СИСТЕМНІ ЕНДПОІНТИ (Lab 3: Перевірка середовища та обробки помилок)
 @app.get("/health", tags=["System"])
 async def health_check():
-    return {"status": "ok", "service": "petitions-service"}
+    return {
+        "status": "ok",
+        "service": "petitions-service",
+        "environment": settings.APP_ENV,
+        "debug": settings.DEBUG,
+        "database": settings.DATABASE_URL.split("///")[-1],
+    }
+
+
+@app.get("/system/env-info", tags=["System"])
+async def env_info():
+    """Повертає інформацію про поточне середовище виконання (Sandbox vs Production)."""
+    return {
+        "app_env": settings.APP_ENV,
+        "project_name": settings.PROJECT_NAME,
+        "debug_mode": settings.DEBUG,
+        "database_url": settings.DATABASE_URL,
+        "db_echo": settings.DB_ECHO,
+        "seed_demo_data": settings.SEED_DEMO_DATA,
+        "token_expire_minutes": settings.ACCESS_TOKEN_EXPIRE_MINUTES,
+    }
+
+
+@app.get("/system/trigger-error", tags=["System"])
+async def trigger_simulated_error():
+    """Ендпоінт для тестування приховування внутрішніх стектрейсів при 500 помилці (Lab 3)."""
+    raise RuntimeError("Симульований збій бази даних: непередбачена критична помилка рушія!")

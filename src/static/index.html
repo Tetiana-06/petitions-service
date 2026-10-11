@@ -581,6 +581,8 @@
     .console-status-200 { color: #4ade80; font-weight: bold; }
     .console-status-401 { color: #f87171; font-weight: bold; }
     .console-status-403 { color: #fbbf24; font-weight: bold; }
+    .console-status-500 { color: #f43f5e; font-weight: bold; }
+
 
     /* Tables */
     .data-table {
@@ -701,8 +703,8 @@
   <!-- Top Demo Bar -->
   <div class="top-bar">
     <div class="top-bar-left">
-      <span class="lab-badge">Лабораторна робота №2</span>
-      <span>Користувачі, ролі (RBAC) та контроль доступу</span>
+      <span class="lab-badge" id="env-badge" style="background: rgba(255, 255, 255, 0.25); font-weight: 800;">SANDBOX 🛠️</span>
+      <span id="env-title">Сервіс Петицій | ЛР №2 (RBAC/IDOR) та ЛР №3 (Середовища/CI/CD)</span>
     </div>
     <div class="quick-users">
       <span style="opacity: 0.85;">Швидкий вхід:</span>
@@ -711,6 +713,7 @@
       <button class="quick-btn" onclick="quickLogin('olena_kyiv', 'user123')">👤 User B (olena_kyiv)</button>
     </div>
   </div>
+
 
   <!-- Navbar -->
   <header class="navbar">
@@ -1013,9 +1016,26 @@
             <div class="console-box" id="console-s4">// Очікування запуску перевірки...</div>
           </div>
 
+          <!-- Сценарій 5 (Лабораторна робота №3) -->
+          <div class="scenario-card highlight" style="border-left-color: #10b981;">
+            <div class="scenario-header">
+              <div class="scenario-icon" style="background: #d1fae5; color: #059669;">⚙️</div>
+              <div class="scenario-title">5. Середовища та обробка 500 помилок (ЛР 3)</div>
+            </div>
+            <div class="scenario-desc">
+              Перевірка розділення конфігурацій (Sandbox/Production) та приховування внутрішніх стектрейсів (<strong>500 Error</strong>) у Production (<strong>DEBUG=False</strong>).
+            </div>
+            <div class="scenario-actions">
+              <button class="btn btn-secondary btn-sm" onclick="runSecurityTest('env_info')">ℹ️ Перевірити конфігурацію (/system/env-info)</button>
+              <button class="btn btn-danger btn-sm" onclick="runSecurityTest('trigger_error')">💥 Викликати збій 500 (/system/trigger-error)</button>
+            </div>
+            <div class="console-box" id="console-s5">// Очікування запуску перевірки...</div>
+          </div>
+
         </div>
       </div>
     </section>
+
 
   </main>
 
@@ -1699,6 +1719,14 @@
         url = '/petitions/1';
         body = { title: 'Капітальний ремонт міського парку культури та відпочинку (Оновлено автором)' };
         token = aData.access_token;
+      } else if (scenario === 'env_info') {
+        consoleEl = document.getElementById('console-s5');
+        method = 'GET';
+        url = '/system/env-info';
+      } else if (scenario === 'trigger_error') {
+        consoleEl = document.getElementById('console-s5');
+        method = 'GET';
+        url = '/system/trigger-error';
       }
 
       consoleEl.innerHTML = `> ${method} ${url} ... Відправка запиту...`;
@@ -1706,11 +1734,30 @@
       consoleEl.innerHTML = `> ${method} ${url}\n> Token: ${token ? 'Bearer ' + token.substring(0, 16) + '...' : 'None (Anonymous)'}\n< Status: <span class="console-status-${res.status}">${res.status}</span>\n< Response: ${JSON.stringify(res.data, null, 2)}`;
     }
 
+    async function loadEnvInfo() {
+      try {
+        const res = await fetch(`${API_BASE}/system/env-info`);
+        const data = await res.json();
+        const badge = document.getElementById('env-badge');
+        if (badge) {
+          if (data.app_env === 'production') {
+            badge.textContent = `PRODUCTION 🛡️ (DEBUG: OFF)`;
+            badge.style.background = 'rgba(220, 38, 38, 0.4)';
+          } else {
+            badge.textContent = `SANDBOX 🛠️ (DEBUG: ON)`;
+            badge.style.background = 'rgba(22, 163, 74, 0.4)';
+          }
+        }
+      } catch (e) {}
+    }
+
     // Init
     window.addEventListener('DOMContentLoaded', async () => {
+      await loadEnvInfo();
       await updateAuthUI();
       await loadPetitions();
     });
+
   </script>
 </body>
 </html>
