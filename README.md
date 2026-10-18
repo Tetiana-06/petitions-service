@@ -65,7 +65,7 @@ APP_ENV=production uvicorn src.main:app --host 127.0.0.1 --port 8000
 ## 🌐 Доступ до інтерфейсу та API
 
 Після запуску відкрийте в браузері:
-- **Веб-інтерфейс (з бейджем середовища та стендом безпеки):** [http://localhost:8000/](http://localhost:8000/)
+- **Веб-інтерфейс (із відображенням середовища у заголовку):** [http://localhost:8000/](http://localhost:8000/)
 - **Інтерактивна документація Swagger UI:** [http://localhost:8000/docs](http://localhost:8000/docs)
 - **Інформація про середовище (JSON):** [http://localhost:8000/system/env-info](http://localhost:8000/system/env-info)
 - **Перевірка стану сервісу:** [http://localhost:8000/health](http://localhost:8000/health)
