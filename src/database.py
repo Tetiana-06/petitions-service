@@ -19,6 +19,7 @@ def resolve_database_url(url: str) -> str:
 
 # 1. Створюємо асинхронний рушій із параметрами з конфігурації
 db_url = resolve_database_url(settings.DATABASE_URL)
+#!!!!!!!!!!!!!!!
 engine = create_async_engine(db_url, echo=settings.DB_ECHO)
 
 # 2. Фабрика асинхронних сесій

@@ -3,15 +3,15 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Сервіс Електронних Петицій | Лабораторна робота №2</title>
+  <title>Local Petitions Service [Sandbox]</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
   <style>
     :root {
-      --primary: #2563eb;
-      --primary-hover: #1d4ed8;
-      --primary-light: #dbeafe;
+      --primary: #059669;
+      --primary-hover: #047857;
+      --primary-light: #d1fae5;
       --success: #16a34a;
       --success-light: #dcfce7;
       --warning: #d97706;
@@ -47,57 +47,6 @@
       flex-direction: column;
     }
 
-    /* Top banner */
-    .top-bar {
-      background: linear-gradient(135deg, #1e3a8a 0%, #2563eb 50%, #3b82f6 100%);
-      color: white;
-      padding: 8px 24px;
-      font-size: 0.875rem;
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      flex-wrap: wrap;
-      gap: 8px;
-    }
-
-    .top-bar-left {
-      display: flex;
-      align-items: center;
-      gap: 12px;
-    }
-
-    .top-bar-left .lab-badge {
-      background: rgba(255, 255, 255, 0.2);
-      padding: 2px 8px;
-      border-radius: 9999px;
-      font-weight: 600;
-      font-size: 0.75rem;
-      text-transform: uppercase;
-      letter-spacing: 0.05em;
-    }
-
-    .quick-users {
-      display: flex;
-      align-items: center;
-      gap: 8px;
-    }
-
-    .quick-btn {
-      background: rgba(255, 255, 255, 0.15);
-      border: 1px solid rgba(255, 255, 255, 0.3);
-      color: white;
-      padding: 4px 10px;
-      border-radius: 6px;
-      cursor: pointer;
-      font-size: 0.75rem;
-      font-weight: 600;
-      transition: all 0.2s;
-    }
-
-    .quick-btn:hover {
-      background: white;
-      color: var(--primary);
-    }
 
     /* Navbar */
     .navbar {
@@ -127,6 +76,29 @@
       color: var(--text);
       font-size: 1.25rem;
       font-weight: 800;
+    }
+
+    .env-tag {
+      font-size: 0.8rem;
+      font-weight: 700;
+      padding: 2px 8px;
+      border-radius: 6px;
+      letter-spacing: 0.03em;
+      margin-left: 6px;
+      display: inline-block;
+      vertical-align: middle;
+    }
+
+    .env-sandbox {
+      background: #dcfce7;
+      color: #15803d;
+      border: 1px solid #86efac;
+    }
+
+    .env-production {
+      background: #fee2e2;
+      color: #b91c1c;
+      border: 1px solid #fca5a5;
     }
 
     .brand-icon {
@@ -351,7 +323,7 @@
 
     .input-field:focus {
       border-color: var(--primary);
-      box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.15);
+      box-shadow: 0 0 0 3px rgba(5, 150, 105, 0.15);
     }
 
     /* Petitions Grid */
@@ -471,7 +443,7 @@
 
     .form-control:focus {
       border-color: var(--primary);
-      box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.15);
+      box-shadow: 0 0 0 3px rgba(5, 150, 105, 0.15);
     }
 
     textarea.form-control {
@@ -690,7 +662,7 @@
     .toast-success { background: #16a34a; }
     .toast-error { background: #dc2626; }
     .toast-warning { background: #d97706; }
-    .toast-info { background: #2563eb; }
+    .toast-info { background: #059669; }
 
     @keyframes toastIn {
       from { transform: translateX(100%); opacity: 0; }
@@ -700,45 +672,19 @@
 </head>
 <body>
 
-  <!-- Top Demo Bar -->
-  <div class="top-bar">
-    <div class="top-bar-left">
-      <span class="lab-badge" id="env-badge" style="background: rgba(255, 255, 255, 0.25); font-weight: 800;">SANDBOX 🛠️</span>
-      <span id="env-title">Сервіс Петицій | ЛР №2 (RBAC/IDOR) та ЛР №3 (Середовища/CI/CD)</span>
-    </div>
-    <div class="quick-users">
-      <span style="opacity: 0.85;">Швидкий вхід:</span>
-      <button class="quick-btn" onclick="quickLogin('admin', 'admin123')">👑 Admin (admin)</button>
-      <button class="quick-btn" onclick="quickLogin('ivan_patriot', 'user123')">👤 User A (ivan_patriot)</button>
-      <button class="quick-btn" onclick="quickLogin('olena_kyiv', 'user123')">👤 User B (olena_kyiv)</button>
-    </div>
-  </div>
-
-
   <!-- Navbar -->
   <header class="navbar">
     <div class="nav-container">
       <a href="#" class="brand" onclick="switchTab('feed'); return false;">
-        <div class="brand-icon">📜</div>
-        <span>Petitions Service</span>
+        <span id="brand-title">Local Petitions Service <span class="env-tag env-sandbox">[Sandbox]</span></span>
       </a>
 
       <nav class="nav-tabs">
-        <button class="nav-tab active" id="tab-btn-feed" onclick="switchTab('feed')">
-          <span>📋</span> Каталог
-        </button>
-        <button class="nav-tab" id="tab-btn-create" onclick="switchTab('create')">
-          <span>✍️</span> Створити
-        </button>
-        <button class="nav-tab" id="tab-btn-user" onclick="switchTab('user')">
-          <span>👤</span> Мій кабінет
-        </button>
-        <button class="nav-tab" id="tab-btn-admin" onclick="switchTab('admin')">
-          <span>🛡️</span> Адмінка
-        </button>
-        <button class="nav-tab" id="tab-btn-security" onclick="switchTab('security')">
-          <span>🧪</span> Стенд безпеки
-        </button>
+        <button class="nav-tab active" id="tab-btn-feed" onclick="switchTab('feed')">Каталог</button>
+        <button class="nav-tab" id="tab-btn-create" onclick="switchTab('create')">Створити</button>
+        <button class="nav-tab" id="tab-btn-user" onclick="switchTab('user')">Мій кабінет</button>
+        <button class="nav-tab" id="tab-btn-admin" onclick="switchTab('admin')">Адмін-панель</button>
+        <button class="nav-tab" id="tab-btn-security" onclick="switchTab('security')">Стенд безпеки</button>
       </nav>
 
       <div class="auth-section">
@@ -780,7 +726,7 @@
             <option value="approved">Схвалені</option>
             <option value="rejected">Відхилені</option>
           </select>
-          <button class="btn btn-secondary" onclick="loadPetitions()">🔄 Оновити</button>
+          <button class="btn btn-secondary" onclick="loadPetitions()">Оновити</button>
         </div>
       </div>
 
@@ -837,7 +783,7 @@
           </div>
 
           <div style="background: var(--bg); padding: 16px; border-radius: 8px; border: 1px solid var(--border);">
-            <h3 style="font-size: 1rem; font-weight: 700; margin-bottom: 12px;">Редагування профілю (IDOR захист)</h3>
+            <h3 style="font-size: 1rem; font-weight: 700; margin-bottom: 12px;">Редагування профілю</h3>
             <form id="profile-edit-form" onsubmit="handleUpdateProfile(event)">
               <div class="form-group">
                 <label class="form-label" style="font-size: 0.8rem;">Повне ім'я</label>
@@ -870,11 +816,11 @@
             <h2 class="card-title" id="admin-stub-title">Панель керування адміністратора (/admin/dashboard)</h2>
             <p class="card-desc" id="admin-stub-msg">Повний контроль над системними даними та петиціями громадян</p>
           </div>
-          <span class="role-tag admin" style="font-size: 0.85rem; padding: 4px 10px;">🛡️ Full System Management</span>
+          <span class="role-tag admin" style="font-size: 0.85rem; padding: 4px 10px;">Full System Management</span>
         </div>
 
         <div id="admin-error-notice" style="display: none; background: var(--danger-light); color: var(--danger); padding: 14px; border-radius: 8px; margin-top: 16px; font-weight: 600;">
-          ⚠️ Доступ заборонено (403 Forbidden). Для перегляду цієї панелі необхідно мати роль <strong>admin</strong>!
+          Доступ заборонено (403 Forbidden). Для перегляду цієї панелі необхідно мати роль <strong>admin</strong>!
         </div>
 
         <div id="admin-content" style="margin-top: 16px;">
@@ -941,7 +887,7 @@
     <!-- VIEW 5: SECURITY PLAYGROUND (Інтерактивний стенд безпеки для захисту лаби) -->
     <section id="view-security" class="view-panel">
       <div class="card">
-        <h2 class="card-title">🧪 Інтерактивний стенд демонстрації захисту та сценаріїв безпеки</h2>
+        <h2 class="card-title">Інтерактивний стенд демонстрації захисту та сценаріїв безпеки</h2>
         <p class="card-desc">
           Цей стенд дозволяє в один клік перевірити всі обов'язкові сценарії лабораторної роботи №2 у режимі реального часу.
           Кожна кнопка відправляє справжній HTTP-запит до API та виводить відповідь сервера.
@@ -952,7 +898,7 @@
           <!-- Сценарій 1 -->
           <div class="scenario-card highlight">
             <div class="scenario-header">
-              <div class="scenario-icon">🚫</div>
+              <div class="scenario-icon">1</div>
               <div class="scenario-title">1. Анонімний доступ</div>
             </div>
             <div class="scenario-desc">
@@ -960,8 +906,8 @@
               <strong>Очікується: 401 Unauthorized</strong>.
             </div>
             <div class="scenario-actions">
-              <button class="btn btn-secondary btn-sm" onclick="runSecurityTest('anon_user')">⚡ GET /users/me (Без токена)</button>
-              <button class="btn btn-secondary btn-sm" onclick="runSecurityTest('anon_admin')">⚡ GET /admin/dashboard (Без токена)</button>
+              <button class="btn btn-secondary btn-sm" onclick="runSecurityTest('anon_user')">GET /users/me (Без токена)</button>
+              <button class="btn btn-secondary btn-sm" onclick="runSecurityTest('anon_admin')">GET /admin/dashboard (Без токена)</button>
             </div>
             <div class="console-box" id="console-s1">// Очікування запуску перевірки...</div>
           </div>
@@ -969,15 +915,15 @@
           <!-- Сценарій 2 -->
           <div class="scenario-card highlight">
             <div class="scenario-header">
-              <div class="scenario-icon">🔑</div>
+              <div class="scenario-icon">2</div>
               <div class="scenario-title">2. Автентифікація та помилки входу</div>
             </div>
             <div class="scenario-desc">
               Перевірка входу з правильними даними (<strong>200 OK + JWT</strong>) та з невірним паролем (<strong>401 Unauthorized</strong>).
             </div>
             <div class="scenario-actions">
-              <button class="btn btn-secondary btn-sm" onclick="runSecurityTest('login_success')">✅ Вхід з вірними даними (ivan_patriot)</button>
-              <button class="btn btn-secondary btn-sm" onclick="runSecurityTest('login_bad')">❌ Вхід з невірним паролем</button>
+              <button class="btn btn-secondary btn-sm" onclick="runSecurityTest('login_success')">Вхід з вірними даними (pavlo)</button>
+              <button class="btn btn-secondary btn-sm" onclick="runSecurityTest('login_bad')">Вхід з невірним паролем</button>
             </div>
             <div class="console-box" id="console-s2">// Очікування запуску перевірки...</div>
           </div>
@@ -985,16 +931,16 @@
           <!-- Сценарій 3 -->
           <div class="scenario-card highlight">
             <div class="scenario-header">
-              <div class="scenario-icon">🛡️</div>
+              <div class="scenario-icon">3</div>
               <div class="scenario-title">3. Вертикальне розмежування ролей</div>
             </div>
             <div class="scenario-desc">
-              Звичайний користувач намагається отримати доступ до адмінки (<strong>403 Forbidden</strong>).
-              Адміністратор отримує повний доступ (<strong>200 OK</strong>).
+              Звичайний користувач (Павло) намагається отримати доступ до адмін-панелі (<strong>403 Forbidden</strong>).
+              Адміністратор (tetiana) отримує повний доступ (<strong>200 OK</strong>).
             </div>
             <div class="scenario-actions">
-              <button class="btn btn-secondary btn-sm" onclick="runSecurityTest('role_user_to_admin')">🛑 Користувач лізе в /admin/dashboard (403)</button>
-              <button class="btn btn-secondary btn-sm" onclick="runSecurityTest('role_admin_to_admin')">👑 Адміністратор в /admin/dashboard (200)</button>
+              <button class="btn btn-secondary btn-sm" onclick="runSecurityTest('role_user_to_admin')">Користувач (Павло) лізе в /admin/dashboard (403)</button>
+              <button class="btn btn-secondary btn-sm" onclick="runSecurityTest('role_admin_to_admin')">Адміністратор (tetiana) в /admin/dashboard (200)</button>
             </div>
             <div class="console-box" id="console-s3">// Очікування запуску перевірки...</div>
           </div>
@@ -1002,16 +948,16 @@
           <!-- Сценарій 4 -->
           <div class="scenario-card highlight">
             <div class="scenario-header">
-              <div class="scenario-icon">🔒</div>
+              <div class="scenario-icon">4</div>
               <div class="scenario-title">4. Горизонтальне розмежування (IDOR)</div>
             </div>
             <div class="scenario-desc">
-              Спроба користувача B змінити петицію користувача A або профіль іншого користувача (<strong>403 Forbidden</strong>).
+              Спроба користувача Христина змінити петицію користувача Павло або профіль іншого користувача (<strong>403 Forbidden</strong>).
             </div>
             <div class="scenario-actions">
-              <button class="btn btn-secondary btn-sm" onclick="runSecurityTest('idor_petition')">🛑 User B редагує петицію User A (403)</button>
-              <button class="btn btn-secondary btn-sm" onclick="runSecurityTest('idor_profile')">🛑 User B редагує профіль User A (403)</button>
-              <button class="btn btn-secondary btn-sm" onclick="runSecurityTest('idor_own_ok')">✅ User A редагує власну петицію (200)</button>
+              <button class="btn btn-secondary btn-sm" onclick="runSecurityTest('idor_petition')">Христина редагує петицію Павла (403)</button>
+              <button class="btn btn-secondary btn-sm" onclick="runSecurityTest('idor_profile')">Христина редагує профіль Павла (403)</button>
+              <button class="btn btn-secondary btn-sm" onclick="runSecurityTest('idor_own_ok')">Павло редагує власну петицію (200)</button>
             </div>
             <div class="console-box" id="console-s4">// Очікування запуску перевірки...</div>
           </div>
@@ -1019,15 +965,15 @@
           <!-- Сценарій 5 (Лабораторна робота №3) -->
           <div class="scenario-card highlight" style="border-left-color: #10b981;">
             <div class="scenario-header">
-              <div class="scenario-icon" style="background: #d1fae5; color: #059669;">⚙️</div>
+              <div class="scenario-icon" style="background: #d1fae5; color: #059669;">5</div>
               <div class="scenario-title">5. Середовища та обробка 500 помилок (ЛР 3)</div>
             </div>
             <div class="scenario-desc">
               Перевірка розділення конфігурацій (Sandbox/Production) та приховування внутрішніх стектрейсів (<strong>500 Error</strong>) у Production (<strong>DEBUG=False</strong>).
             </div>
             <div class="scenario-actions">
-              <button class="btn btn-secondary btn-sm" onclick="runSecurityTest('env_info')">ℹ️ Перевірити конфігурацію (/system/env-info)</button>
-              <button class="btn btn-danger btn-sm" onclick="runSecurityTest('trigger_error')">💥 Викликати збій 500 (/system/trigger-error)</button>
+              <button class="btn btn-secondary btn-sm" onclick="runSecurityTest('env_info')">Перевірити конфігурацію (/system/env-info)</button>
+              <button class="btn btn-danger btn-sm" onclick="runSecurityTest('trigger_error')">Викликати збій 500 (/system/trigger-error)</button>
             </div>
             <div class="console-box" id="console-s5">// Очікування запуску перевірки...</div>
           </div>
@@ -1050,7 +996,7 @@
         <form onsubmit="handleLoginForm(event)">
           <div class="form-group">
             <label class="form-label">Ім'я користувача (Логін)</label>
-            <input type="text" id="login-username" class="form-control" required placeholder="Наприклад: ivan_patriot">
+            <input type="text" id="login-username" class="form-control" required placeholder="Наприклад: tetiana або pavlo">
           </div>
           <div class="form-group">
             <label class="form-label">Пароль</label>
@@ -1076,7 +1022,7 @@
         <form onsubmit="handleRegisterForm(event)">
           <div class="form-group">
             <label class="form-label">Логін *</label>
-            <input type="text" id="reg-username" class="form-control" required placeholder="Новий логін">
+            <input type="text" id="reg-username" class="form-control" required placeholder="Тетяна">
           </div>
           <div class="form-group">
             <label class="form-label">Пароль *</label>
@@ -1084,11 +1030,11 @@
           </div>
           <div class="form-group">
             <label class="form-label">Повне ім'я</label>
-            <input type="text" id="reg-fullname" class="form-control" placeholder="Тарас Шевченко">
+            <input type="text" id="reg-fullname" class="form-control" placeholder="Тетяна Шостак">
           </div>
           <div class="form-group">
             <label class="form-label">Email</label>
-            <input type="email" id="reg-email" class="form-control" placeholder="taras@example.com">
+            <input type="email" id="reg-email" class="form-control" placeholder="tetiana@example.com">
           </div>
           <div class="form-group">
             <label class="form-label">Роль (згідно з лаб. роботою)</label>
@@ -1150,7 +1096,7 @@
       const container = document.getElementById('toast-container');
       const toast = document.createElement('div');
       toast.className = `toast toast-${type}`;
-      toast.innerHTML = `<span>${type === 'success' ? '✅' : type === 'error' ? '❌' : type === 'warning' ? '⚠️' : 'ℹ️'}</span> <span>${message}</span>`;
+      toast.innerHTML = `<span>${message}</span>`;
       container.appendChild(toast);
       setTimeout(() => {
         toast.remove();
@@ -1160,7 +1106,9 @@
     // Modal helpers
     function openModal(id) { document.getElementById(id).classList.add('active'); }
     function closeModal(id) { document.getElementById(id).classList.remove('active'); }
-    function openLoginModal() { openModal('modal-login'); }
+    function openLoginModal() {
+      openModal('modal-login');
+    }
     function openRegisterModal() { openModal('modal-register'); }
 
     // Navigation Switcher
@@ -1241,7 +1189,7 @@
       loadPetitions();
     }
 
-    // Quick Login
+    // Login function
     async function quickLogin(username, password) {
       const formData = new URLSearchParams();
       formData.append('username', username);
@@ -1324,7 +1272,6 @@
       if (petitions.length === 0) {
         container.innerHTML = `
           <div style="grid-column: 1 / -1; text-align: center; padding: 40px; color: var(--text-muted); background: white; border-radius: var(--radius); border: 1px dashed var(--border);">
-            <div style="font-size: 2rem; margin-bottom: 8px;">📭</div>
             <p style="font-weight: 600;">Петицій не знайдено</p>
           </div>
         `;
@@ -1369,10 +1316,10 @@
             </div>
 
             <div class="card-actions">
-              <button class="btn btn-primary btn-sm" onclick="voteForPetition(${p.id})">✍️ Підписати</button>
-              ${isAuthor ? `<button class="btn btn-secondary btn-sm" onclick="openEditPetitionModal(${p.id}, '${escapeHtml(p.title).replace(/'/g, "\\'")}', '${escapeHtml(p.description).replace(/'/g, "\\'")}')">✏️ Редагувати</button>` : ''}
-              ${isAdmin ? `<button class="btn btn-secondary btn-sm" onclick="changePetitionStatusPrompt(${p.id})">⚖️ Статус</button>` : ''}
-              ${isAuthor || isAdmin ? `<button class="btn btn-danger btn-sm" onclick="deletePetition(${p.id})">🗑️</button>` : ''}
+              <button class="btn btn-primary btn-sm" onclick="voteForPetition(${p.id})">Підписати</button>
+              ${isAuthor ? `<button class="btn btn-secondary btn-sm" onclick="openEditPetitionModal(${p.id}, '${escapeHtml(p.title).replace(/'/g, "\\'")}', '${escapeHtml(p.description).replace(/'/g, "\\'")}')">Редагувати</button>` : ''}
+              ${isAdmin ? `<button class="btn btn-secondary btn-sm" onclick="changePetitionStatusPrompt(${p.id})">Змінити статус</button>` : ''}
+              ${isAuthor || isAdmin ? `<button class="btn btn-danger btn-sm" onclick="deletePetition(${p.id})">Видалити</button>` : ''}
             </div>
           </div>
         `;
@@ -1541,7 +1488,7 @@
 
       if (!resDashboard.ok) {
         errNotice.style.display = 'block';
-        errNotice.innerHTML = `⚠️ Доступ заборонено (Статус ${resDashboard.status} ${resDashboard.status === 403 ? 'Forbidden' : 'Error'}). Деталі: <strong>${resDashboard.data.detail || 'Потрібні права адміністратора'}</strong>`;
+        errNotice.innerHTML = `Доступ заборонено (Статус ${resDashboard.status} ${resDashboard.status === 403 ? 'Forbidden' : 'Error'}). Деталі: <strong>${resDashboard.data.detail || 'Потрібні права адміністратора'}</strong>`;
         adminContent.style.display = 'none';
         return;
       }
@@ -1625,7 +1572,7 @@
         method = 'POST';
         url = '/auth/login';
         const fd = new URLSearchParams();
-        fd.append('username', 'ivan_patriot');
+        fd.append('username', 'pavlo');
         fd.append('password', 'user123');
         const res = await fetch(`${API_BASE}${url}`, {
           method,
@@ -1633,14 +1580,14 @@
           body: fd.toString()
         });
         const data = await res.json();
-        consoleEl.innerHTML = `> POST ${url}\n> Payload: username=ivan_patriot, password=***\n< Status: <span class="console-status-${res.status}">${res.status} ${res.statusText}</span>\n< JWT Token: ${data.access_token ? data.access_token.substring(0, 32) + '...' : 'none'}\n< Role: ${data.user ? data.user.role : 'user'}`;
+        consoleEl.innerHTML = `> POST ${url}\n> Payload: username=pavlo, password=***\n< Status: <span class="console-status-${res.status}">${res.status} ${res.statusText}</span>\n< JWT Token: ${data.access_token ? data.access_token.substring(0, 32) + '...' : 'none'}\n< Role: ${data.user ? data.user.role : 'user'}`;
         return;
       } else if (scenario === 'login_bad') {
         consoleEl = document.getElementById('console-s2');
         method = 'POST';
         url = '/auth/login';
         const fd = new URLSearchParams();
-        fd.append('username', 'ivan_patriot');
+        fd.append('username', 'pavlo');
         fd.append('password', 'WRONG_PASSWORD_123');
         const res = await fetch(`${API_BASE}${url}`, {
           method,
@@ -1648,7 +1595,7 @@
           body: fd.toString()
         });
         const data = await res.json();
-        consoleEl.innerHTML = `> POST ${url}\n> Payload: username=ivan_patriot, password=WRONG\n< Status: <span class="console-status-${res.status}">${res.status} ${res.statusText}</span>\n< Response: ${JSON.stringify(data)}`;
+        consoleEl.innerHTML = `> POST ${url}\n> Payload: username=pavlo, password=WRONG\n< Status: <span class="console-status-${res.status}">${res.status} ${res.statusText}</span>\n< Response: ${JSON.stringify(data)}`;
         return;
       } else if (scenario === 'role_user_to_admin') {
         consoleEl = document.getElementById('console-s3');
@@ -1656,7 +1603,7 @@
         const uLogin = await fetch(`${API_BASE}/auth/login`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-          body: 'username=ivan_patriot&password=user123'
+          body: 'username=pavlo&password=user123'
         });
         const uData = await uLogin.json();
         method = 'GET';
@@ -1667,7 +1614,7 @@
         const aLogin = await fetch(`${API_BASE}/auth/login`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-          body: 'username=admin&password=admin123'
+          body: 'username=tetiana&password=admin123'
         });
         const aData = await aLogin.json();
         method = 'GET';
@@ -1675,36 +1622,36 @@
         token = aData.access_token;
       } else if (scenario === 'idor_petition') {
         consoleEl = document.getElementById('console-s4');
-        // Login as olena_kyiv (User B)
+        // Login as khrystyna (User B)
         const bLogin = await fetch(`${API_BASE}/auth/login`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-          body: 'username=olena_kyiv&password=user123'
+          body: 'username=khrystyna&password=user123'
         });
         const bData = await bLogin.json();
-        // Target petition 1 (belonging to ivan_patriot User A)
+        // Target petition 1 (belonging to pavlo User A)
         method = 'PUT';
         url = '/petitions/1';
         body = { title: 'Зламано хакером (IDOR атака)' };
         token = bData.access_token;
       } else if (scenario === 'idor_profile') {
         consoleEl = document.getElementById('console-s4');
-        // Login as olena_kyiv (User B, id 8 or similar)
+        // Login as khrystyna (User B, id 8 or similar)
         const bLogin = await fetch(`${API_BASE}/auth/login`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-          body: 'username=olena_kyiv&password=user123'
+          body: 'username=khrystyna&password=user123'
         });
         const bData = await bLogin.json();
-        // Try to modify ivan_patriot's profile (id 7 or 1)
-        const ivanProfile = await apiRequest('/users/me', 'GET', null, (await (await fetch(`${API_BASE}/auth/login`, {
+        // Try to modify pavlo's profile
+        const pavloProfile = await apiRequest('/users/me', 'GET', null, (await (await fetch(`${API_BASE}/auth/login`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-          body: 'username=ivan_patriot&password=user123'
+          body: 'username=pavlo&password=user123'
         })).json()).access_token);
 
         method = 'PUT';
-        url = `/users/${ivanProfile.data.id}`;
+        url = `/users/${pavloProfile.data.id}`;
         body = { full_name: 'Зламаний хакером профіль' };
         token = bData.access_token;
       } else if (scenario === 'idor_own_ok') {
@@ -1712,7 +1659,7 @@
         const aLogin = await fetch(`${API_BASE}/auth/login`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-          body: 'username=ivan_patriot&password=user123'
+          body: 'username=pavlo&password=user123'
         });
         const aData = await aLogin.json();
         method = 'PUT';
@@ -1737,18 +1684,21 @@
     async function loadEnvInfo() {
       try {
         const res = await fetch(`${API_BASE}/system/env-info`);
-        const data = await res.json();
-        const badge = document.getElementById('env-badge');
-        if (badge) {
-          if (data.app_env === 'production') {
-            badge.textContent = `PRODUCTION 🛡️ (DEBUG: OFF)`;
-            badge.style.background = 'rgba(220, 38, 38, 0.4)';
-          } else {
-            badge.textContent = `SANDBOX 🛠️ (DEBUG: ON)`;
-            badge.style.background = 'rgba(22, 163, 74, 0.4)';
+        if (res.ok) {
+          const data = await res.json();
+          const isProd = data.app_env === 'production';
+          const envName = isProd ? 'Production' : 'Sandbox';
+          const fullTitle = `Local Petitions Service [${envName}]`;
+
+          document.title = fullTitle;
+          const brandEl = document.getElementById('brand-title');
+          if (brandEl) {
+            brandEl.innerHTML = `Local Petitions Service <span class="env-tag env-${data.app_env}">[${envName}]</span>`;
           }
         }
-      } catch (e) {}
+      } catch (e) {
+        console.error('Помилка завантаження інформації про середовище:', e);
+      }
     }
 
     // Init

@@ -38,6 +38,7 @@ async def init_models():
     print(f"[{settings.APP_ENV.upper()}] Таблиці успішно ініціалізовано!")
 
 
+#!!!!!!!! перевірка прапорця
 async def seed_data():
     if not settings.SEED_DEMO_DATA:
         print(f"[{settings.APP_ENV.upper()}] Пропуск завантаження демо-даних (SEED_DEMO_DATA=False для production)")
@@ -45,47 +46,47 @@ async def seed_data():
 
     async with AsyncSessionLocal() as session:
         # 1. Перевірка наявності користувачів
-        res = await session.execute(select(User).where(User.username == "admin"))
+        res = await session.execute(select(User).where(User.username == "tetiana"))
         admin_user = res.scalars().first()
 
         if not admin_user:
             admin_user = User(
-                username="admin",
+                username="tetiana",
                 hashed_password=hash_password("admin123"),
                 role=UserRole.ADMIN.value,
-                full_name="Головний Адміністратор",
-                email="admin@petitions.gov.ua",
+                full_name="Тетяна (Адміністратор)",
+                email="tetiana@petitions.gov.ua",
             )
             session.add(admin_user)
 
-        res_ivan = await session.execute(select(User).where(User.username == "ivan_patriot"))
-        ivan_user = res_ivan.scalars().first()
-        if not ivan_user:
-            ivan_user = User(
-                username="ivan_patriot",
+        res_pavlo = await session.execute(select(User).where(User.username == "pavlo"))
+        pavlo_user = res_pavlo.scalars().first()
+        if not pavlo_user:
+            pavlo_user = User(
+                username="pavlo",
                 hashed_password=hash_password("user123"),
                 role=UserRole.USER.value,
-                full_name="Іван Коваленко",
-                email="ivan.kovalenko@example.com",
+                full_name="Павло",
+                email="pavlo@example.com",
             )
-            session.add(ivan_user)
+            session.add(pavlo_user)
 
-        res_olena = await session.execute(select(User).where(User.username == "olena_kyiv"))
-        olena_user = res_olena.scalars().first()
-        if not olena_user:
-            olena_user = User(
-                username="olena_kyiv",
+        res_khrystyna = await session.execute(select(User).where(User.username == "khrystyna"))
+        khrystyna_user = res_khrystyna.scalars().first()
+        if not khrystyna_user:
+            khrystyna_user = User(
+                username="khrystyna",
                 hashed_password=hash_password("user123"),
                 role=UserRole.USER.value,
-                full_name="Олена Шевченко",
-                email="olena.shevchenko@example.com",
+                full_name="Христина",
+                email="khrystyna@example.com",
             )
-            session.add(olena_user)
+            session.add(khrystyna_user)
 
         await session.commit()
         await session.refresh(admin_user)
-        await session.refresh(ivan_user)
-        await session.refresh(olena_user)
+        await session.refresh(pavlo_user)
+        await session.refresh(khrystyna_user)
 
         # 2. Перевірка наявності петицій
         res_petitions = await session.execute(select(Petition))
@@ -101,7 +102,7 @@ async def seed_data():
                 ),
                 target_votes=500,
                 status=PetitionStatus.ACTIVE.value,
-                author_id=ivan_user.id,
+                author_id=pavlo_user.id,
             )
             p2 = Petition(
                 title="Впровадження безконтактної оплати у всьому муніципальному транспорті",
@@ -111,7 +112,7 @@ async def seed_data():
                 ),
                 target_votes=1000,
                 status=PetitionStatus.ACTIVE.value,
-                author_id=olena_user.id,
+                author_id=khrystyna_user.id,
             )
             p3 = Petition(
                 title="Створення безбар'єрного простору та пандусів у центрі міста",
@@ -121,17 +122,17 @@ async def seed_data():
                 ),
                 target_votes=250,
                 status=PetitionStatus.UNDER_REVIEW.value,
-                author_id=ivan_user.id,
+                author_id=pavlo_user.id,
             )
             session.add_all([p1, p2, p3])
             await session.commit()
 
             # Додаємо кілька початкових голосів
-            sig_ivan = hashlib.sha256(f"signature_user_{ivan_user.id}_pet_{p2.id}".encode()).hexdigest()
-            sig_olena = hashlib.sha256(f"signature_user_{olena_user.id}_pet_{p1.id}".encode()).hexdigest()
+            sig_pavlo = hashlib.sha256(f"signature_user_{pavlo_user.id}_pet_{p2.id}".encode()).hexdigest()
+            sig_khrystyna = hashlib.sha256(f"signature_user_{khrystyna_user.id}_pet_{p1.id}".encode()).hexdigest()
 
-            v1 = Vote(petition_id=p2.id, user_id=ivan_user.id, voter_signature_hash=sig_ivan)
-            v2 = Vote(petition_id=p1.id, user_id=olena_user.id, voter_signature_hash=sig_olena)
+            v1 = Vote(petition_id=p2.id, user_id=pavlo_user.id, voter_signature_hash=sig_pavlo)
+            v2 = Vote(petition_id=p1.id, user_id=khrystyna_user.id, voter_signature_hash=sig_khrystyna)
             session.add_all([v1, v2])
             await session.commit()
 

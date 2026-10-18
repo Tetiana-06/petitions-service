@@ -23,7 +23,7 @@ def get_env_file_path(env_name: Optional[str] = None) -> Optional[Path]:
 
 
 class Settings(BaseSettings):
-    """Типізована конфігурація застосунку через pydantic-settings (Lab 3)."""
+    """Типізована конфігурація застосунку через pydantic-settings."""
 
     # Назва середовища: sandbox або production
     APP_ENV: str = "sandbox"
@@ -56,7 +56,10 @@ def get_settings(env_name: Optional[str] = None) -> Settings:
     if env_name:
         env_path = get_env_file_path(env_name)
         if env_path and env_path.exists():
-            return Settings(_env_file=str(env_path))
+            from dotenv import dotenv_values
+
+            file_values = {k: v for k, v in dotenv_values(env_path).items() if v is not None}
+            return Settings(_env_file=str(env_path), **file_values)
         return Settings(APP_ENV=env_name)
     return Settings()
 

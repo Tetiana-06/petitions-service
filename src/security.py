@@ -17,6 +17,8 @@ pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/auth/login")
 oauth2_scheme_optional = OAuth2PasswordBearer(tokenUrl="/auth/login", auto_error=False)
 
+# Тестова зміна для перевірки PR в GitHub Actions
+
 
 def hash_password(password: str) -> str:
     return pwd_context.hash(password)

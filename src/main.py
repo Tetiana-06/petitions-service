@@ -62,6 +62,7 @@ app = FastAPI(
 # Middleware безпечної обробки непередбачених помилок 500 (Lab 3: приховування внутрішніх стектрейсів у Production)
 @app.middleware("http")
 async def security_exception_middleware(request: Request, call_next):
+    # На рівні HTTP-middleware перехоплюються всі непередбачені винятки (try ... except Exception as exc):
     try:
         return await call_next(request)
     except Exception as exc:
@@ -93,7 +94,14 @@ if STATIC_DIR.exists():
 async def root():
     index_file = STATIC_DIR / "index.html"
     if index_file.exists():
-        return FileResponse(str(index_file))
+        return FileResponse(
+            str(index_file),
+            headers={
+                "Cache-Control": "no-cache, no-store, must-revalidate",
+                "Pragma": "no-cache",
+                "Expires": "0",
+            },
+        )
     return {"message": "Сервіс місцевих електронних петицій працює"}
 
 
@@ -529,6 +537,7 @@ async def env_info():
     }
 
 
+# діагностичний тестовий маршрут /system/trigger-error
 @app.get("/system/trigger-error", tags=["System"])
 async def trigger_simulated_error():
     """Ендпоінт для тестування приховування внутрішніх стектрейсів при 500 помилці (Lab 3)."""

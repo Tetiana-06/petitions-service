@@ -7,10 +7,18 @@ from src.config import get_settings
 from src.database import resolve_database_url
 from src.main import app
 
+# Тестова зміна для перевірки PR в GitHub Actions
 
-# ---------------------------------------------------------------------------
+
+@pytest.fixture(autouse=True)
+def isolate_test_environment(monkeypatch):
+    """Гарантує ізоляцію: видаляє глобальні змінні оточення сесії перед кожним тестом."""
+    monkeypatch.delenv("APP_ENV", raising=False)
+
+
 # 1. ТЕСТУВАННЯ РОЗДІЛЕННЯ КОНФІГУРАЦІЙ ЧЕРЕЗ ЗМІННІ ОТОЧЕННЯ
-# ---------------------------------------------------------------------------
+
+
 def test_sandbox_configuration_loading():
     """Перевірка зчитування налаштувань тестового середовища (.env.sandbox)."""
     sandbox_settings = get_settings("sandbox")
@@ -34,9 +42,9 @@ def test_production_configuration_loading():
     assert prod_settings.ACCESS_TOKEN_EXPIRE_MINUTES == 30
 
 
-# ---------------------------------------------------------------------------
 # 2. ТЕСТУВАННЯ ІЗОЛЯЦІЇ БАЗ ДАНИХ
-# ---------------------------------------------------------------------------
+
+
 def test_database_isolation_between_environments():
     """Перевірка того, що Sandbox та Production використовують фізично різні БД."""
     sand_settings = get_settings("sandbox")
@@ -51,9 +59,9 @@ def test_database_isolation_between_environments():
     assert "production" in prod_db
 
 
-# ---------------------------------------------------------------------------
 # 3. ТЕСТУВАННЯ РЕЖИМІВ БЕЗПЕКИ ТА ОБРОБКИ ПОМИЛОК 500
-# ---------------------------------------------------------------------------
+
+
 @pytest.mark.asyncio
 async def test_500_error_masks_stacktrace_in_production(monkeypatch):
     """Перевірка того, що при DEBUG=False стектрейс та внутрішні деталі не показуються."""
@@ -95,9 +103,9 @@ async def test_500_error_reveals_debug_in_sandbox(monkeypatch):
         assert "Симульований збій бази даних" in data["debug_error"]
 
 
-# ---------------------------------------------------------------------------
 # 4. ТЕСТУВАННЯ ЕНДПОІНТІВ ІНФОРМАЦІЇ ПРО СЕРЕДОВИЩЕ
-# ---------------------------------------------------------------------------
+
+
 @pytest.mark.asyncio
 async def test_system_env_endpoints():
     """Перевірка ендпоінтів /health та /system/env-info."""
