@@ -458,7 +458,7 @@ async def delete_petition(
     return {"status": "success", "message": f"Petition {petition_id} deleted successfully"}
 
 
-# Голосування за петицію
+# Голосування за петицію !!!!!!!!!
 @app.post(
     "/petitions/{petition_id}/vote",
     status_code=status.HTTP_201_CREATED,
@@ -489,6 +489,7 @@ async def vote_for_petition(
     )
 
     # Перевірка на дублікат голосу (за хешем підпису або user_id)
+    # Шукаємо, чи є вже голос за цю петицію від цього користувача або з таким самим хешем підпису
     existing_vote = await db.execute(
         select(Vote).where(
             Vote.petition_id == petition_id,
