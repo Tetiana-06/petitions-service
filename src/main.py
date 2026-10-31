@@ -1,6 +1,7 @@
 # Каркас FastAPI з ендпоінтами сервісу петицій та контролем доступу (RBAC, Lab 2 & 3)
 import hashlib
 import logging
+import socket
 from contextlib import asynccontextmanager
 from pathlib import Path
 from typing import List, Optional
@@ -520,7 +521,8 @@ async def health_check():
         "service": "petitions-service",
         "environment": settings.APP_ENV,
         "debug": settings.DEBUG,
-        "database": settings.DATABASE_URL.split("///")[-1],
+        "database": settings.DATABASE_URL.split("/")[-1],
+        "hostname": socket.gethostname(),  # Lab 6: ID контейнера-репліки, що обробив запит
     }
 
 

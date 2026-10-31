@@ -39,7 +39,7 @@ class User(Base):
     role: Mapped[str] = mapped_column(String(20), default=UserRole.USER.value, nullable=False)
     full_name: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
     email: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=get_utc_now)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=get_utc_now)
 
     petitions = relationship("Petition", back_populates="author", cascade="all, delete-orphan")
     votes = relationship("Vote", back_populates="user", cascade="all, delete-orphan")
@@ -69,7 +69,7 @@ class Petition(Base):
     author_id: Mapped[int] = mapped_column(Integer, ForeignKey("users.id"), nullable=False)
 
     # Дата й час створення: тип DATETIME, поточний час у форматі UTC
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=get_utc_now)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=get_utc_now)
 
     author = relationship("User", back_populates="petitions")
     votes = relationship("Vote", back_populates="petition", cascade="all, delete-orphan")
@@ -95,7 +95,7 @@ class Vote(Base):
     voter_signature_hash: Mapped[str] = mapped_column(String(128), nullable=False, index=True)
 
     # Дата й час фіксації голосу (за замовчуванням поточний час створення)
-    voted_at: Mapped[datetime] = mapped_column(DateTime, default=get_utc_now)
+    voted_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=get_utc_now)
 
     petition = relationship("Petition", back_populates="votes")
     user = relationship("User", back_populates="votes")

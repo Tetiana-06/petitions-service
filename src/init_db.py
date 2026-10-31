@@ -28,6 +28,9 @@ async def init_models():
             ("petitions", "status", "VARCHAR(30) DEFAULT 'active'"),
             ("votes", "user_id", "INTEGER REFERENCES users(id)"),
         ]
+        # Лише для SQLite: у PostgreSQL помилка ALTER TABLE обриває всю транзакцію, а таблиці створюються одразу повними
+        if engine.dialect.name != "sqlite":
+            columns_to_ensure = []
         for table, col, col_type in columns_to_ensure:
             try:
                 await conn.exec_driver_sql(f"ALTER TABLE {table} ADD COLUMN {col} {col_type}")
