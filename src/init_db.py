@@ -28,12 +28,19 @@ async def init_models():
             ("petitions", "status", "VARCHAR(30) DEFAULT 'active'"),
             ("votes", "user_id", "INTEGER REFERENCES users(id)"),
         ]
+        # Лише для SQLite: у PostgreSQL помилка ALTER TABLE обриває всю транзакцію, а таблиці створюються одразу повними
+        if engine.dialect.name != "sqlite":
+            columns_to_ensure = []
         for table, col, col_type in columns_to_ensure:
             try:
                 await conn.exec_driver_sql(f"ALTER TABLE {table} ADD COLUMN {col} {col_type}")
             except Exception:
                 # Колонка вже існує
                 pass
+
+        # Lab 7: create_all не додає індекси до вже існуючих таблиць, тому створюємо їх явно
+        await conn.exec_driver_sql("CREATE INDEX IF NOT EXISTS ix_petitions_created_at ON petitions (created_at)")
+        await conn.exec_driver_sql("CREATE INDEX IF NOT EXISTS ix_votes_petition_user ON votes (petition_id, user_id)")
 
     print(f"[{settings.APP_ENV.upper()}] Таблиці успішно ініціалізовано!")
 

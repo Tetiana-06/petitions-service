@@ -1,0 +1,68 @@
+ANALYZE
+=== 1. GET /petitions/1 : один запит, кількість голосів рахує COUNT() у БД ===
+                                                                   QUERY PLAN                                                                   
+------------------------------------------------------------------------------------------------------------------------------------------------
+ Nested Loop Left Join  (cost=0.14..20.16 rows=1 width=522) (actual time=1.429..1.436 rows=1 loops=1)
+   Join Filter: (users.id = petitions.author_id)
+   Rows Removed by Join Filter: 1
+   ->  Index Scan using ix_petitions_id on petitions  (cost=0.14..8.16 rows=1 width=506) (actual time=0.015..0.021 rows=1 loops=1)
+         Index Cond: (id = 1)
+   ->  Seq Scan on users  (cost=0.00..1.03 rows=3 width=12) (actual time=0.003..0.003 rows=2 loops=1)
+   SubPlan 1
+     ->  Aggregate  (cost=10.92..10.93 rows=1 width=8) (actual time=1.405..1.405 rows=1 loops=1)
+           ->  Index Scan using ix_votes_petition_id on votes  (cost=0.29..10.73 rows=75 width=4) (actual time=0.024..0.920 rows=10003 loops=1)
+                 Index Cond: (petition_id = petitions.id)
+ Planning Time: 1.277 ms
+ Execution Time: 1.542 ms
+(12 rows)
+
+=== 2. GET /petitions/ : каталог (індекс ix_petitions_created_at + COUNT для кожної петиції) ===
+                                                                       QUERY PLAN                                                                        
+---------------------------------------------------------------------------------------------------------------------------------------------------------
+ Nested Loop Left Join  (cost=0.29..2251.75 rows=203 width=522) (actual time=0.070..2.707 rows=203 loops=1)
+   ->  Index Scan Backward using ix_petitions_created_at on petitions  (cost=0.14..28.19 rows=203 width=506) (actual time=0.018..0.055 rows=203 loops=1)
+   ->  Memoize  (cost=0.14..0.22 rows=1 width=12) (actual time=0.000..0.000 rows=1 loops=203)
+         Cache Key: petitions.author_id
+         Cache Mode: logical
+         Hits: 201  Misses: 2  Evictions: 0  Overflows: 0  Memory Usage: 1kB
+         ->  Index Scan using ix_users_id on users  (cost=0.13..0.21 rows=1 width=12) (actual time=0.012..0.013 rows=1 loops=2)
+               Index Cond: (id = petitions.author_id)
+   SubPlan 1
+     ->  Aggregate  (cost=10.92..10.93 rows=1 width=8) (actual time=0.012..0.012 rows=1 loops=203)
+           ->  Index Scan using ix_votes_petition_id on votes  (cost=0.29..10.73 rows=75 width=4) (actual time=0.001..0.008 rows=74 loops=203)
+                 Index Cond: (petition_id = petitions.id)
+ Planning Time: 0.165 ms
+ Execution Time: 2.797 ms
+(14 rows)
+
+=== 3. POST /petitions/1/vote : перевірка дубліката (складений індекс ix_votes_petition_user) ===
+                                                                 QUERY PLAN                                                                 
+--------------------------------------------------------------------------------------------------------------------------------------------
+ Bitmap Heap Scan on votes  (cost=8.71..16.17 rows=2 width=85) (actual time=0.073..0.074 rows=1 loops=1)
+   Recheck Cond: (((voter_signature_hash)::text = 'abc'::text) OR ((petition_id = 1) AND (user_id = 2)))
+   Filter: (petition_id = 1)
+   Heap Blocks: exact=1
+   ->  BitmapOr  (cost=8.71..8.71 rows=2 width=0) (actual time=0.067..0.067 rows=0 loops=1)
+         ->  Bitmap Index Scan on ix_votes_voter_signature_hash  (cost=0.00..4.42 rows=1 width=0) (actual time=0.019..0.019 rows=0 loops=1)
+               Index Cond: ((voter_signature_hash)::text = 'abc'::text)
+         ->  Bitmap Index Scan on ix_votes_petition_user  (cost=0.00..4.29 rows=1 width=0) (actual time=0.040..0.040 rows=1 loops=1)
+               Index Cond: ((petition_id = 1) AND (user_id = 2))
+ Planning Time: 0.325 ms
+ Execution Time: 0.139 ms
+(11 rows)
+
+=== 4. Список індексів таблиць ===
+ tablename |           indexname           |                                               indexdef                                                
+-----------+-------------------------------+-------------------------------------------------------------------------------------------------------
+ petitions | ix_petitions_created_at       | CREATE INDEX ix_petitions_created_at ON public.petitions USING btree (created_at)
+ petitions | ix_petitions_id               | CREATE INDEX ix_petitions_id ON public.petitions USING btree (id)
+ petitions | petitions_pkey                | CREATE UNIQUE INDEX petitions_pkey ON public.petitions USING btree (id)
+ votes     | ix_votes_id                   | CREATE INDEX ix_votes_id ON public.votes USING btree (id)
+ votes     | ix_votes_petition_id          | CREATE INDEX ix_votes_petition_id ON public.votes USING btree (petition_id)
+ votes     | ix_votes_petition_user        | CREATE INDEX ix_votes_petition_user ON public.votes USING btree (petition_id, user_id)
+ votes     | ix_votes_user_id              | CREATE INDEX ix_votes_user_id ON public.votes USING btree (user_id)
+ votes     | ix_votes_voter_signature_hash | CREATE INDEX ix_votes_voter_signature_hash ON public.votes USING btree (voter_signature_hash)
+ votes     | uq_petition_voter             | CREATE UNIQUE INDEX uq_petition_voter ON public.votes USING btree (petition_id, voter_signature_hash)
+ votes     | votes_pkey                    | CREATE UNIQUE INDEX votes_pkey ON public.votes USING btree (id)
+(10 rows)
+

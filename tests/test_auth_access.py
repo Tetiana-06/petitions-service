@@ -306,3 +306,34 @@ async def test_mvp_business_logic_voting_and_moderation(client: AsyncClient):
     status_admin_ok = await client.patch(f"/petitions/{pet_id}/status", json={"status": "approved"}, headers=headers_admin)
     assert status_admin_ok.status_code == 200
     assert status_admin_ok.json()["status"] == "approved"
+
+
+# ---------------------------------------------------------------------------
+# Lab 7: після оптимізації (COUNT замість завантаження всіх голосів)
+# кількість голосів у деталях петиції та в каталозі має рахуватися правильно
+# ---------------------------------------------------------------------------
+@pytest.mark.asyncio
+async def test_lab7_votes_count_after_optimization(client: AsyncClient):
+    tokens = []
+    for name in ["opt_author", "opt_voter_1", "opt_voter_2"]:
+        await client.post("/auth/register", json={"username": name, "password": "pass", "role": "user"})
+        login = await client.post("/auth/login", data={"username": name, "password": "pass"})
+        tokens.append(login.json()["access_token"])
+
+    created = await client.post(
+        "/petitions/",
+        json={"title": "Оптимізація", "description": "Перевірка підрахунку голосів"},
+        headers={"Authorization": f"Bearer {tokens[0]}"},
+    )
+    petition_id = created.json()["id"]
+
+    for token in tokens[1:]:
+        res = await client.post(f"/petitions/{petition_id}/vote", json={}, headers={"Authorization": f"Bearer {token}"})
+        assert res.status_code == 201
+
+    detail = (await client.get(f"/petitions/{petition_id}")).json()
+    assert detail["votes_count"] == 2
+    assert detail["author_username"] == "opt_author"
+
+    catalog = (await client.get("/petitions/")).json()
+    assert [p["votes_count"] for p in catalog if p["id"] == petition_id] == [2]
