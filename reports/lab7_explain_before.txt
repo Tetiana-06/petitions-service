@@ -1,0 +1,51 @@
+ANALYZE
+=== 1. GET /petitions/1 : selectinload(Petition.votes) тягне ВСІ голоси петиції, щоб порахувати len() ===
+                                                              QUERY PLAN                                                               
+---------------------------------------------------------------------------------------------------------------------------------------
+ Index Scan using ix_votes_petition_id on votes  (cost=0.29..362.55 rows=10001 width=85) (actual time=0.025..1.325 rows=10001 loops=1)
+   Index Cond: (petition_id = 1)
+ Planning Time: 0.390 ms
+ Execution Time: 1.612 ms
+(4 rows)
+
+=== 2. GET /petitions/ : каталог без індексу на created_at ===
+                                                   QUERY PLAN                                                   
+----------------------------------------------------------------------------------------------------------------
+ Sort  (cost=23.81..24.32 rows=203 width=506) (actual time=0.236..0.248 rows=203 loops=1)
+   Sort Key: created_at DESC
+   Sort Method: quicksort  Memory: 131kB
+   ->  Seq Scan on petitions  (cost=0.00..16.03 rows=203 width=506) (actual time=0.004..0.029 rows=203 loops=1)
+ Planning Time: 0.372 ms
+ Execution Time: 0.344 ms
+(6 rows)
+
+=== 3. GET /petitions/ : selectinload тягне голоси ВСІХ петицій ===
+                                                     QUERY PLAN                                                     
+--------------------------------------------------------------------------------------------------------------------
+ Hash Join  (cost=18.57..425.84 rows=15085 width=85) (actual time=0.124..3.469 rows=15085 loops=1)
+   Hash Cond: (votes.petition_id = petitions.id)
+   ->  Seq Scan on votes  (cost=0.00..366.85 rows=15085 width=85) (actual time=0.006..0.766 rows=15085 loops=1)
+   ->  Hash  (cost=16.03..16.03 rows=203 width=4) (actual time=0.078..0.079 rows=203 loops=1)
+         Buckets: 1024  Batches: 1  Memory Usage: 16kB
+         ->  Seq Scan on petitions  (cost=0.00..16.03 rows=203 width=4) (actual time=0.003..0.036 rows=203 loops=1)
+ Planning Time: 0.908 ms
+ Execution Time: 3.931 ms
+(8 rows)
+
+=== 4. POST /petitions/1/vote : перевірка дубліката голосу ===
+                                                                 QUERY PLAN                                                                 
+--------------------------------------------------------------------------------------------------------------------------------------------
+ Bitmap Heap Scan on votes  (cost=8.71..16.17 rows=1 width=85) (actual time=0.029..0.030 rows=0 loops=1)
+   Recheck Cond: (((voter_signature_hash)::text = 'abc'::text) OR (user_id = 2))
+   Filter: (petition_id = 1)
+   Rows Removed by Filter: 1
+   Heap Blocks: exact=1
+   ->  BitmapOr  (cost=8.71..8.71 rows=2 width=0) (actual time=0.025..0.025 rows=0 loops=1)
+         ->  Bitmap Index Scan on ix_votes_voter_signature_hash  (cost=0.00..4.42 rows=1 width=0) (actual time=0.015..0.015 rows=0 loops=1)
+               Index Cond: ((voter_signature_hash)::text = 'abc'::text)
+         ->  Bitmap Index Scan on ix_votes_user_id  (cost=0.00..4.29 rows=1 width=0) (actual time=0.003..0.003 rows=1 loops=1)
+               Index Cond: (user_id = 2)
+ Planning Time: 0.075 ms
+ Execution Time: 0.084 ms
+(12 rows)
+

@@ -4,7 +4,7 @@ from enum import Enum
 from typing import Optional
 
 # Типи колонок, обмеження та зовнішній ключ із ядра SQLAlchemy
-from sqlalchemy import DateTime, ForeignKey, Integer, String, Text, UniqueConstraint
+from sqlalchemy import DateTime, ForeignKey, Index, Integer, String, Text, UniqueConstraint
 
 # Сучасні інструменти декларативної типізації SQLAlchemy 2.0:
 # Mapped — тип поля в Python, mapped_column — опис колонки в БД
@@ -69,7 +69,8 @@ class Petition(Base):
     author_id: Mapped[int] = mapped_column(Integer, ForeignKey("users.id"), nullable=False)
 
     # Дата й час створення: тип DATETIME, поточний час у форматі UTC
-    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=get_utc_now)
+    # Lab 7: індекс для сортування каталогу ORDER BY created_at DESC
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=get_utc_now, index=True)
 
     author = relationship("User", back_populates="petitions")
     votes = relationship("Vote", back_populates="petition", cascade="all, delete-orphan")
@@ -106,4 +107,6 @@ class Vote(Base):
         # Складений унікальний констрейнт: пара значень (petition_id + voter_signature_hash)
         # не може повторюватися; спроба проголосувати вдруге викличе помилку IntegrityError на рівні БД
         UniqueConstraint("petition_id", "voter_signature_hash", name="uq_petition_voter"),
+        # Lab 7: складений індекс для перевірки «чи вже голосував цей користувач за цю петицію»
+        Index("ix_votes_petition_user", "petition_id", "user_id"),
     )

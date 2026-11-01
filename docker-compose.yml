@@ -15,9 +15,23 @@ services:
       timeout: 3s
       retries: 10
 
+  # Lab 7: кеш Redis, спільний для всіх реплік web
+  redis:
+    image: redis:7-alpine
+    networks:
+      - backend
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
   web:
     build: .
     env_file: .env
+    environment:
+      # Lab 7: адреса кешу. Щоб вимкнути кеш: $env:REDIS_URL=""; docker compose up -d
+      REDIS_URL: ${REDIS_URL-redis://redis:6379/0}
     # Lab 6: 3 однакові репліки; порт назовні не публікується — вхід лише через nginx
     deploy:
       replicas: 3
@@ -26,6 +40,8 @@ services:
       - backend
     depends_on:
       db:
+        condition: service_healthy
+      redis:
         condition: service_healthy
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"]

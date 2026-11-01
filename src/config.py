@@ -44,6 +44,10 @@ class Settings(BaseSettings):
     # Завантаження початкових демо-даних (True для Sandbox, False для Production)
     SEED_DEMO_DATA: bool = True
 
+    # Lab 7: кеш Redis (порожній рядок = кеш вимкнено) та час життя запису кешу в секундах
+    REDIS_URL: str = ""
+    CACHE_TTL_SECONDS: int = 30
+
     model_config = SettingsConfigDict(
         env_file=get_env_file_path(),
         env_file_encoding="utf-8",

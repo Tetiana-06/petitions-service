@@ -12,8 +12,8 @@ from fastapi.security import OAuth2PasswordRequestForm
 from fastapi.staticfiles import StaticFiles
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy.orm import selectinload
 
+from src.cache import cache_delete, cache_get, cache_set
 from src.config import settings
 from src.database import get_db
 from src.init_db import init_models, seed_data
@@ -254,38 +254,74 @@ async def admin_get_all_users(
 
 
 # 4. БІЗНЕС-ЛОГІКА ПЕТИЦІЙ (MVP)
+
+# Lab 7: ключі кешу Redis
+LIST_CACHE_KEY = "petitions:list"
+
+
+def petition_cache_key(petition_id: int) -> str:
+    return f"petition:{petition_id}"
+
+
+def petitions_query():
+    """
+    Lab 7 (оптимізація запиту): ОДИН SQL-запит повертає петицію, ім'я автора та кількість голосів.
+    Раніше selectinload(Petition.votes) завантажував у Python УСІ рядки голосів (10 000 для вірусної
+    петиції) лише для того, щоб порахувати len(). Тепер підрахунок робить сама БД через COUNT().
+    """
+    votes_count = select(func.count(Vote.id)).where(Vote.petition_id == Petition.id).correlate(Petition).scalar_subquery()
+    return select(Petition, User.username, votes_count).outerjoin(User, User.id == Petition.author_id)
+
+
+def to_response(petition: Petition, author_username: Optional[str], votes_count: int) -> PetitionResponse:
+    return PetitionResponse(
+        id=petition.id,
+        title=petition.title,
+        description=petition.description,
+        target_votes=petition.target_votes,
+        status=petition.status,
+        author_id=petition.author_id,
+        author_username=author_username,
+        votes_count=votes_count or 0,
+        created_at=petition.created_at,
+    )
+
+
+async def load_petition_response(db: AsyncSession, petition_id: int) -> Optional[PetitionResponse]:
+    row = (await db.execute(petitions_query().where(Petition.id == petition_id))).first()
+    return to_response(*row) if row else None
+
+
+async def invalidate_petition_cache(petition_id: int):
+    """Після зміни петиції або нового голосу видаляємо застарілі записи з кешу."""
+    await cache_delete(petition_cache_key(petition_id), LIST_CACHE_KEY)
+
+
 @app.get("/petitions/", response_model=List[PetitionResponse], tags=["Petitions"])
 async def list_petitions(
     q: Optional[str] = Query(None, description="Пошук за ключовими словами"),
     status_filter: Optional[str] = Query(None, alias="status", description="Фільтр за статусом"),
     db: AsyncSession = Depends(get_db),
 ):
-    query = select(Petition).options(selectinload(Petition.author), selectinload(Petition.votes))
+    # Кешуємо лише повний каталог без фільтрів — його відкривають найчастіше
+    use_cache = not q and not status_filter
+    if use_cache:
+        cached = await cache_get(LIST_CACHE_KEY)
+        if cached is not None:
+            return cached
 
+    query = petitions_query()
     if q:
         query = query.where(Petition.title.ilike(f"%{q}%") | Petition.description.ilike(f"%{q}%"))
     if status_filter:
         query = query.where(Petition.status == status_filter)
-
     query = query.order_by(Petition.created_at.desc())
-    result = await db.execute(query)
-    petitions = result.scalars().all()
 
-    response = []
-    for p in petitions:
-        response.append(
-            PetitionResponse(
-                id=p.id,
-                title=p.title,
-                description=p.description,
-                target_votes=p.target_votes,
-                status=p.status,
-                author_id=p.author_id,
-                author_username=p.author.username if p.author else None,
-                votes_count=len(p.votes) if p.votes else 0,
-                created_at=p.created_at,
-            )
-        )
+    rows = (await db.execute(query)).all()
+    response = [to_response(*row) for row in rows]
+
+    if use_cache:
+        await cache_set(LIST_CACHE_KEY, [p.model_dump(mode="json") for p in response])
     return response
 
 
@@ -294,23 +330,17 @@ async def get_petition_detail(
     petition_id: int,
     db: AsyncSession = Depends(get_db),
 ):
-    query = select(Petition).options(selectinload(Petition.author), selectinload(Petition.votes)).where(Petition.id == petition_id)
-    result = await db.execute(query)
-    petition = result.scalars().first()
+    # Lab 7: спочатку шукаємо петицію в кеші Redis
+    cached = await cache_get(petition_cache_key(petition_id))
+    if cached is not None:
+        return cached
+
+    petition = await load_petition_response(db, petition_id)
     if not petition:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Petition not found")
 
-    return PetitionResponse(
-        id=petition.id,
-        title=petition.title,
-        description=petition.description,
-        target_votes=petition.target_votes,
-        status=petition.status,
-        author_id=petition.author_id,
-        author_username=petition.author.username if petition.author else None,
-        votes_count=len(petition.votes) if petition.votes else 0,
-        created_at=petition.created_at,
-    )
+    await cache_set(petition_cache_key(petition_id), petition.model_dump(mode="json"))
+    return petition
 
 
 @app.post(
@@ -334,6 +364,7 @@ async def create_petition(
     db.add(new_petition)
     await db.commit()
     await db.refresh(new_petition)
+    await cache_delete(LIST_CACHE_KEY)  # у каталозі з'явилася нова петиція
 
     return PetitionResponse(
         id=new_petition.id,
@@ -360,9 +391,7 @@ async def update_petition(
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    query = select(Petition).options(selectinload(Petition.author), selectinload(Petition.votes)).where(Petition.id == petition_id)
-    result = await db.execute(query)
-    petition = result.scalars().first()
+    petition = await db.get(Petition, petition_id)
     if not petition:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Petition not found")
 
@@ -379,19 +408,8 @@ async def update_petition(
         petition.description = update_data.description
 
     await db.commit()
-    await db.refresh(petition)
-
-    return PetitionResponse(
-        id=petition.id,
-        title=petition.title,
-        description=petition.description,
-        target_votes=petition.target_votes,
-        status=petition.status,
-        author_id=petition.author_id,
-        author_username=petition.author.username if petition.author else None,
-        votes_count=len(petition.votes) if petition.votes else 0,
-        created_at=petition.created_at,
-    )
+    await invalidate_petition_cache(petition_id)
+    return await load_petition_response(db, petition_id)
 
 
 # Зміна статусу петиції адміністратором (вертикальне розмежування ролей)
@@ -406,9 +424,7 @@ async def update_petition_status(
     admin: User = Depends(require_admin),
     db: AsyncSession = Depends(get_db),
 ):
-    query = select(Petition).options(selectinload(Petition.author), selectinload(Petition.votes)).where(Petition.id == petition_id)
-    result = await db.execute(query)
-    petition = result.scalars().first()
+    petition = await db.get(Petition, petition_id)
     if not petition:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Petition not found")
 
@@ -421,19 +437,8 @@ async def update_petition_status(
 
     petition.status = status_data.status
     await db.commit()
-    await db.refresh(petition)
-
-    return PetitionResponse(
-        id=petition.id,
-        title=petition.title,
-        description=petition.description,
-        target_votes=petition.target_votes,
-        status=petition.status,
-        author_id=petition.author_id,
-        author_username=petition.author.username if petition.author else None,
-        votes_count=len(petition.votes) if petition.votes else 0,
-        created_at=petition.created_at,
-    )
+    await invalidate_petition_cache(petition_id)
+    return await load_petition_response(db, petition_id)
 
 
 # Видалення петиції (доступно автору або адміністратору)
@@ -456,6 +461,7 @@ async def delete_petition(
 
     await db.delete(petition)
     await db.commit()
+    await invalidate_petition_cache(petition_id)
     return {"status": "success", "message": f"Petition {petition_id} deleted successfully"}
 
 
@@ -510,6 +516,7 @@ async def vote_for_petition(
     )
     db.add(vote)
     await db.commit()
+    await invalidate_petition_cache(petition_id)  # змінилася кількість голосів
     return {"status": "success", "message": "Vote recorded successfully"}
 
 
